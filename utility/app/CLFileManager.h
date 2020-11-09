@@ -8,18 +8,22 @@
 #include <thread/CLLock.h>
 #include "unordered_map"
 #include "CLTableFile.h"
+#include "thread/CLRwLock.h"
+#include "CLTableConfigure.h"
+
 namespace zy{
     namespace dms{
 
         class CLFileManager {
         private:
-
+            static std::string _s_meta_data_file_prefix;
             static int _s_max_rows_for_per_file;
             static std::string _s_dms_prefix;
             static std::string _s_dms_suffix;
             static thread::CLLock _s_create_instance_lock;
             static CLFileManager *_s_instance;
             static int _s_row_size;
+            friend class CLTableConfigure;
             /**
              * 嵌套类实现 内存回收，通过静态的嵌套类 析构来 delete instance，也可以直接用atexist()
              */
@@ -39,6 +43,7 @@ namespace zy{
             long long _cur_total_rows;
             std::unordered_map<std::string, int> _manage_file_rows_map;
             std::string _top_dir;
+            thread::CLRwLock _rwLock;
 
             bool _FindCLFile(int row,CLAbstractTableFile **pFile){
                 if(row > _cur_total_rows){
@@ -80,6 +85,34 @@ namespace zy{
                     return false;
                 }
                 return true;
+            }
+            void ToStorage(){
+                zy::file::CLFile file(CLFileManager::_s_meta_data_file_prefix+
+                                        CLFileManager::_s_dms_prefix);
+                file.Clear();
+                std::unordered_map<std::string,std::string> data;
+                data.emplace("_s_row_size",std::to_string(CLFileManager::_s_row_size));
+                data.emplace("_s_max_rows_for_per_file",std::to_string(CLFileManager::_s_max_rows_for_per_file));
+                data.emplace("_max_file_index",std::to_string(_max_file_index));
+                data.emplace("_cur_total_rows",std::to_string(_cur_total_rows));
+                for(auto &iter:data){
+                    std::string str(iter.first+':'+iter.second+'\n');
+                    file.Write(str.c_str(),str.length());
+                }
+            }
+            bool FromStorage(){
+                zy::file::CLFile file(CLFileManager::_s_meta_data_file_prefix+
+                                      CLFileManager::_s_dms_prefix);
+                std::unordered_map<std::string,std::string> data;
+                int total = 4;
+                data.emplace("_s_row_size",std::to_string(CLFileManager::_s_row_size));
+                data.emplace("_s_max_rows_for_per_file",std::to_string(CLFileManager::_s_max_rows_for_per_file));
+                data.emplace("_max_file_index",std::to_string(_max_file_index));
+                data.emplace("_cur_total_rows",std::to_string(_cur_total_rows));
+                int offset = 0;
+                for(auto &iter:data){
+
+                }
             }
         public:
             CLFileManager(){

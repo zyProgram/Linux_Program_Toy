@@ -11,6 +11,7 @@
 #include "sys/stat.h"
 #include "fcntl.h"
 #include "unistd.h"
+#include "cstring"
 #define MAX_FILE_BUF_SIZE 4096
 namespace zy{
     namespace file{
@@ -42,6 +43,7 @@ namespace zy{
             bool Read(long offset, char *buffer, int total);
             void Flush();
             void Close();
+            void Clear();
             ~CLFile(){
                 Close();
             }

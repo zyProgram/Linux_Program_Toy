@@ -1,31 +1,50 @@
 //
 // Created by zhangyu on 2020/10/24.
 //
+#include <memory>
 #include "CLObject.h"
 #include "ctime"
+#include "app/CLFileManager.h"
 using namespace zy::dms;
+void storage(zy::dms::CLUserAttrVector *v) {
+    int totalBytes = v->GetBufferSize();
+    char buf[totalBytes];
+    v->ToCharBuffer(buf);
+    zy::dms::CLFileManager::GetInstance()->Append(buf, totalBytes);
+}
 int main(){
-    zy::dms::CLUserAttrVector v;
-    std::string typestr[5] = {"Char","Int","Short","Double","Float"};
     srand((unsigned int)time(nullptr));
-    CLObjectProduceFactory factory;
-    char ch = 'a';
-    for(int i=1;i<=20;i++){
-        int r = rand()%2;
-        if(r){
-            auto *charObject = factory.CreateObject(ch++);
-            v.PushBack(charObject);
-        }else{
-            auto *doubleObject = factory.CreateObject(2.2f);
-            v.PushBack(doubleObject);
-        }
+    int totalRow = 1000;
+    //construct 100 attribute type of one row
+    std::vector<CLObjectType> colums_type;
+    colums_type.reserve(100);
+    for(int i=0;i<100;i++){
+        colums_type.push_back(CLObjectType::Int);
     }
-    v.Print();
-    char buf[v.GetBufferSize()];
-    v.ToCharBuffer(buf);
-    zy::dms::CLUserAttrVector v2;
-    v2.FromCharBuffer(buf);
-//    delete charObject;
-//    delete doubleObject;
+
+    std::unique_ptr<zy::dms::CLUserAttrVector> userInfo[totalRow];
+    for(int i=0;i<totalRow;i++){
+        userInfo[i].reset(new CLUserAttrVector(colums_type));
+    }
+    CLObjectProduceFactory factory;
+
+    zy::dms::CLFileManager::InitInstance(1000,sizeof(int)*100);
+    for(int i=0;i<1000;i++){
+        auto &v = userInfo[i];
+        for(int j=1;j<=100;j++){
+            auto *intObject = factory.CreateObject(rand()%100);
+            v->PushBack(intObject);
+        }
+        if(i==1){
+            v->Print();
+        }
+        storage(v.get());
+    }
+    int size = 400;
+    char buf[size];
+    zy::dms::CLFileManager::GetInstance()->Read(2,buf,size);
+    CLUserAttrVector desVec(colums_type);
+    desVec.FromCharBuffer(buf);
+    desVec.Print();
     return 0;
 }

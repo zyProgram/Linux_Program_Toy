@@ -11,8 +11,14 @@
 #include "string"
 #include "assert.h"
 #include "functional"
+#include "cstring"
 namespace zy{
     namespace dms{
+        enum class CLObjectType{
+            Int,
+            Double,
+            Char
+        };
         class CLAbstractObject {
         public:
             virtual void ToCharBuffer(std::string &buf) = 0;
@@ -73,8 +79,18 @@ namespace zy{
          */
         class CLUserAttrVector: public CLAbstractObject{
         private:
+            static std::unordered_map<CLObjectType,size_t> _s_type_size_map;
             std::vector<CLAbstractObject *> _user_attr_vector;
+            std::vector<CLObjectType> _user_attr_type;
+            int _total_size=0;
         public:
+            explicit CLUserAttrVector(const std::vector<CLObjectType> &type){
+                _user_attr_type.reserve(type.size());
+                for(auto &iter:type){
+                    _user_attr_type.push_back(iter);
+                    _total_size+=CLUserAttrVector::_s_type_size_map[iter];
+                }
+            }
             CLUserAttrVector(const CLUserAttrVector &) = delete;
             CLUserAttrVector &operator=(const CLUserAttrVector &) = delete;
             CLUserAttrVector(CLUserAttrVector &&o){
@@ -96,7 +112,6 @@ namespace zy{
             void PushBack(CLAbstractObject *p){
                 _user_attr_vector.push_back(p);
             }
-            CLUserAttrVector() = default;
             void ToCharBuffer(std::string &buf){
                 if(buf.capacity() < GetBufferSize()){
                     buf.reserve(GetBufferSize() - buf.capacity());
@@ -118,14 +133,21 @@ namespace zy{
                 }
             }
             void FromCharBuffer(const char *buf){
+                Clear();
                 int offset = 0;
-                CLAbstractObject *p = nullptr;
-                for(auto &iter:_user_attr_vector){
-                    iter->FromCharBuffer(buf+offset);
-                    offset+=iter->GetBufferSize();
+                CLObjectProduceFactory factory;
+                _user_attr_vector.reserve(_user_attr_type.size());
+                for(auto &iter:_user_attr_type){
+                    if(iter == CLObjectType::Int){
+                        auto *p = factory.CreateObject<int>(0);
+                        p->FromCharBuffer(buf+offset);
+                        offset+=p->GetBufferSize();
+                        _user_attr_vector.push_back(p);
+                    }
                 }
             }
             void FromCharBuffer(const std::string &buf){
+                Clear();
                 assert(buf.capacity() >= GetBufferSize());
                 int offset = 0;
                 for(auto &iter:_user_attr_vector){
@@ -134,11 +156,14 @@ namespace zy{
                 }
             }
             int32_t GetBufferSize(){
-                int total = 0;
-                for(auto &iter:_user_attr_vector){
-                    total+=iter->GetBufferSize();
+                if(_total_size == 0) {
+                    int total = 0;
+                    for (auto &iter:_user_attr_type) {
+                        total += CLUserAttrVector::_s_type_size_map[iter];
+                    }
+                    _total_size = total;
                 }
-                return total;
+                return _total_size;
             }
             void Print(){
                 std::cout<<"user attr vector info:"<<" size:"<<GetBufferSize()<<std::endl;

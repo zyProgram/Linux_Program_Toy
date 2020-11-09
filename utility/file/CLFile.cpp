@@ -60,11 +60,18 @@ void zy::file::CLFile::Close() {
 }
 
 bool zy::file::CLFile::Read(long offset, char *buffer, int total) {
-    off32_t off = lseek(_open_file_handle,offset,SEEK_SET);
+    off_t off = lseek(_open_file_handle,offset,SEEK_SET);
     if (read(_open_file_handle,buffer,total) < 0){
         std::cout<<"error read:"<<strerror(errno)<<std::endl;
         return false;
     }
     return true;
 }
+
+void zy::file::CLFile::Clear() {
+    ftruncate(_open_file_handle,0);
+    lseek(_open_file_handle,0,SEEK_SET);
+}
+
+
 
