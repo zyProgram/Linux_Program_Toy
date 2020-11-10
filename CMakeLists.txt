@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.17)
+cmake_minimum_required(VERSION 3.10)
 project(Linux_DMS)
 
 set(CMAKE_CXX_STANDARD 11)
@@ -6,7 +6,7 @@ aux_source_directory(utility/thread ThreadFile)
 
 aux_source_directory(utility/file IOFile)
 
-aux_source_directory(utility/app AppFile)
+aux_source_directory(app AppFile)
 
 set(NetFile utility/network/CLNetwork.cpp utility/network/CLNetwork.h
         utility/thread/CLAtomicLock.cpp utility/thread/CLAtomicLock.h)
