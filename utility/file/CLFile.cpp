@@ -73,5 +73,15 @@ void zy::file::CLFile::Clear() {
     lseek(_open_file_handle,0,SEEK_SET);
 }
 
+bool zy::file::CLFile::ReadAll(char *buffer, int total, int realCount) {
+    off_t off = lseek(_open_file_handle,0,SEEK_SET);
+    realCount = read(_open_file_handle,buffer,total);
+    if (realCount < 0){
+        std::cout<<"error read:"<<strerror(errno)<<std::endl;
+        return false;
+    }
+    return true;
+}
+
 
 

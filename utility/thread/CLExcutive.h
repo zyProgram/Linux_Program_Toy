@@ -32,21 +32,22 @@ namespace zy{
         class CLThreadExcutive: public CLAbstractExcutive{
         private:
             pthread_t _threadId;
-            bool isCreated = false;
+            bool _isCreated = false;
             static void* cThreadFunc(void *pContext);
         public:
             explicit CLThreadExcutive(CLExcutiveAbstractFunc *pFunc):CLAbstractExcutive(pFunc){}
             void run(){
-                if(!isCreated){
+                if(!_isCreated){
                     if (0 != pthread_create(&_threadId, nullptr, cThreadFunc,this)){
 
                     }
-                    isCreated = true;
+                    _isCreated = true;
                 }
 
             }
             void wait(){
-                if(isCreated){
+                if(_isCreated){
+                    delete __func; //func 's memory control by thread
                     pthread_join(_threadId, nullptr);
                 }
             }

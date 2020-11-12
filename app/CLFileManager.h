@@ -10,9 +10,20 @@
 #include "CLTableFile.h"
 #include "thread/CLRwLock.h"
 #include "CLTableConfigure.h"
-
+#include "thread/CLThreadPool.h"
+#include "thread/CLExcutive.h"
+#include "CLMutilReadWriter.h"
 namespace zy{
     namespace dms{
+        struct SLReaderMethodParam{
+            int row;
+            std::function<void(char *buf,int size)> callback;
+        };
+        struct SLWriterMethodParam{
+            char *buf;
+            int size;
+            std::function<void(int row,char *buf,int size)> callback;
+        };
 
         class CLFileManager {
         private:
@@ -24,8 +35,9 @@ namespace zy{
             static CLFileManager *_s_instance;
             static int _s_row_size;
             friend class CLTableConfigure;
+            CLTableConfigure _configure;
             /**
-             * 嵌套类实现 内存回收，通过静态的嵌套类 析构来 delete instance，也可以直接用atexist()
+             * 嵌套类实现 内存回收，通过静态的嵌套类 析构来 delete instance，也可以用atexist()
              */
             class CLManagerGC{
             public:
@@ -44,52 +56,26 @@ namespace zy{
             std::unordered_map<std::string, int> _manage_file_rows_map;
             std::string _top_dir;
             thread::CLRwLock _rwLock;
+            thread::CLThreadPool *_worker_pool;
 
-            bool _FindCLFile(int row,CLAbstractTableFile **pFile){
-                if(row > _cur_total_rows){
-                    std::cout << "exist current max rows:" << row << " > " << _cur_total_rows << std::endl;
-                    return false;
-                }
-                int index = row / (CLFileManager::_s_max_rows_for_per_file+1) + 1;
-                std::string filename = _ConstructFileName(index);
-                *pFile = _file_manager.at(filename);
-                return true;
-            }
             bool _EqualMaxRow(){
                 return 0 ==  _cur_total_rows % _s_max_rows_for_per_file;
-            }
-            bool _FindCurCLFile(CLAbstractTableFile **pFile){
-                int newRow = _cur_total_rows + 1;
-                int index = newRow / (CLFileManager::_s_max_rows_for_per_file+1) + 1;
-                if(index > _max_file_index){
-                    return false;
-                }
-                std::string filename = _ConstructFileName(index);
-                *pFile = _file_manager.at(filename);
-                return true;
             }
             std::string _ConstructFileName(int index){
                 return _s_dms_prefix+std::to_string(index)+_s_dms_suffix;
             }
-            bool _ExtendLocalCLFile(){
-                int orginIndex = _max_file_index;
-                _max_file_index += 10;
-                try {
-                    std::string filename;
-                    for(int i=orginIndex+1;i<=_max_file_index;i++){
-                        filename = _ConstructFileName(i);
-                        _file_manager.emplace(filename,new CLTableFile(filename,CLFileManager::_s_row_size));
-                    }
-                } catch (std::string &errMsg) {
-                    std::cout<<"write new data. must extend file,but "<<errMsg<<std::endl;
-                    return false;
-                }
-                return true;
-            }
+            bool _FindCurCLFile(CLAbstractTableFile **pFile);
+            bool _FindCLFile(int row,CLAbstractTableFile **pFile);
+
+            bool _ExtendLocalCLFile();
         public:
-            CLFileManager(){
+            CLFileManager(int num=2)
+            {
                 //TODO 处理文件夹
+                _worker_pool = new thread::CLThreadPool(num);
+                _worker_pool->Start();
                 _cur_total_rows = 0;
+                FromStorage();
                 for (int i=1;i<=_max_file_index;i++){
                     std::string filename =_ConstructFileName(i);
                     try {
@@ -110,6 +96,10 @@ namespace zy{
                         delete (iter->second);
                     }
                 }
+                delete _worker_pool;
+            }
+            static int GetRowSize(){
+                return CLFileManager::_s_row_size;
             }
             static bool InitInstance(int perFilesize,int rowSize,
                                     const std::string dirDes = "",
@@ -121,42 +111,22 @@ namespace zy{
                 CLFileManager::_s_dms_suffix = suffix;
                 return true;
             }
-            static CLFileManager *GetInstance(){
-                if(_s_instance != nullptr){
-                    return _s_instance;
-                }
-                _s_create_instance_lock.Lock();
-                try {
-                    if (_s_instance == nullptr) {
-                        if (CLFileManager::_s_row_size == 0) {
-                            throw std::string("init first");
-                        }
-                        _s_instance = new CLFileManager();
-                    }
-                } catch (std::string &errMsg) {
-                    _s_create_instance_lock.UnLock();
-                    throw errMsg;
-                }
-                _s_create_instance_lock.UnLock();
-                return _s_instance;
-            }
+            static CLFileManager *GetInstance();
             void ToStorage(){
-                zy::dms::CLTableConfigure configure;
-                configure._cur_total_rows = _cur_total_rows;
-                configure._max_file_index = _max_file_index;
-                configure._s_max_rows_for_per_file = CLFileManager::_s_max_rows_for_per_file;
-                configure._s_row_size = CLFileManager::_s_row_size;
-                configure.ToStorage();
+                _configure._cur_total_rows = _cur_total_rows;
+                _configure._max_file_index = _max_file_index;
+                _configure._s_max_rows_for_per_file = CLFileManager::_s_max_rows_for_per_file;
+                _configure._s_row_size = CLFileManager::_s_row_size;
+                _configure.ToStorage();
             }
             bool FromStorage(){
-                zy::dms::CLTableConfigure configure;
-                auto flag = configure.FromStorage();
+                auto flag = _configure.FromStorage();
                 if(flag){
-                    CLTableConfigure::_s_row_size = configure._s_row_size;
-                    CLTableConfigure::_s_max_rows_for_per_file = configure._s_max_rows_for_per_file;
+                    _s_row_size = _configure._s_row_size;
+                    _s_max_rows_for_per_file = _configure._s_max_rows_for_per_file;
                 }
             }
-            bool Append(const char *buffer,int total){
+            bool Append(int row,const char *buffer,int total){
                 CLAbstractTableFile *pCLFile;
 
                 if(!_FindCurCLFile(&pCLFile)){
@@ -171,38 +141,42 @@ namespace zy{
                 if(_EqualMaxRow()){
                     pCLFile->Flush();
                 }
+                row = _cur_total_rows;
                 return true;
             }
-            bool Append(const std::string &msg){
-                CLAbstractTableFile *pCLFile;
-                if(!_FindCurCLFile(&pCLFile)){
-                    _ExtendLocalCLFile();
-                    _FindCurCLFile(&pCLFile);
-                }
+            bool Append(const std::string &msg);
 
-                if(pCLFile->WriteRow(msg)){
-                    _cur_total_rows+=1;
-                } else{
-                    return false;
-                }
-                if(_EqualMaxRow()){
-                    pCLFile->Flush();
-                }
-                return true;
-            }
+            bool Read(int row,char *buf,int size);
+            /*
+             * multi thread api
+             * */
+            bool MultiRead(SLReaderMethodParam *param);
 
-            bool Read(int row,char *buf,int size){
-                CLAbstractTableFile *pCLFile;
-                if(!_FindCLFile(row,&pCLFile)){
-                    return false;
-                }
-                int calRow = row % (CLFileManager::_s_max_rows_for_per_file);
-                calRow = ((calRow == 0) ? CLFileManager::_s_max_rows_for_per_file:calRow); //最后一行
-
-                return pCLFile->ReadRow(calRow,buf,size);
-            }
+            bool MultiWrite(SLWriterMethodParam *param);
         };
-
+        class CLMutilReaderFunc: public thread::CLExcutiveAbstractFunc{
+        public:
+            CLMutilReaderFunc(void *pContext):CLExcutiveAbstractFunc(pContext){}
+            void RunFuncEntity(){
+                SLReaderMethodParam *method = (SLReaderMethodParam*)(__runningContext);
+                char buf[CLFileManager::GetRowSize()];
+                CLFileManager::GetInstance()->Read(method->row,buf,CLFileManager::GetRowSize());
+                method->callback(buf,CLFileManager::GetRowSize());
+            }
+            ~CLMutilReaderFunc() = default;
+        };
+        class CLMutilWriterFunc: public thread::CLExcutiveAbstractFunc{
+        public:
+            CLMutilWriterFunc(void *pContext):CLExcutiveAbstractFunc(pContext){}
+            void RunFuncEntity(){
+                SLWriterMethodParam *method = (SLWriterMethodParam*)(__runningContext);
+                char buf[CLFileManager::GetRowSize()];
+                int row;
+                CLFileManager::GetInstance()->Append(row,buf,CLFileManager::GetRowSize());
+                method->callback(row,buf,CLFileManager::GetRowSize());
+            }
+            ~CLMutilWriterFunc() = default;
+        };
     }
 }
 

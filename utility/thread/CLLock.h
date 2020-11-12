@@ -18,8 +18,8 @@ namespace zy {
             pthread_mutex_t _mutex;
         public:
             //为了封装条件变量，_mutex必须暴露出去
-            pthread_mutex_t getMutex();
-            pthread_mutex_t *getMutexPtr();
+            pthread_mutex_t GetMutex();
+            pthread_mutex_t *GetMutexPtr();
             CLLock() {
                 int res = pthread_mutex_init(&_mutex, nullptr);
                 if (res) {

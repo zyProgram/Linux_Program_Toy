@@ -39,8 +39,15 @@ namespace zy{
                 }
                 _filename = filename;
             }
+            bool IsEmpty(){
+                off_t off = lseek(_open_file_handle,0,SEEK_SET);
+                char ch;
+                Read(0, &ch, 1);
+                return ch == EOF;
+            }
             bool Write(const char *buffer,int total);
             bool Read(long offset, char *buffer, int total);
+            bool ReadAll(char *buffer, int total,int realCount);
             void Flush();
             void Close();
             void Clear();

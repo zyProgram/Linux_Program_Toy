@@ -4,9 +4,9 @@
 
 #include "CLLock.h"
 
-pthread_mutex_t zy::thread::CLLock::getMutex() {
+pthread_mutex_t zy::thread::CLLock::GetMutex() {
     return _mutex;
 }
-pthread_mutex_t* zy::thread::CLLock::getMutexPtr() {
+pthread_mutex_t* zy::thread::CLLock::GetMutexPtr() {
     return &_mutex;
 }

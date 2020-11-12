@@ -30,7 +30,7 @@ namespace zy{
             }
 
             bool Wait(CLLock &lock){
-                return 0 == pthread_cond_wait(&_condition_id,lock.getMutexPtr());
+                return 0 == pthread_cond_wait(&_condition_id, lock.GetMutexPtr());
             }
         };
     }

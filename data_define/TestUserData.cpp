@@ -4,13 +4,22 @@
 #include <memory>
 #include "CLObject.h"
 #include "ctime"
-#include "app/CLFileManager.h"
+#include "../app/CLFileManager.h"
 using namespace zy::dms;
 void storage(zy::dms::CLUserAttrVector *v) {
     int totalBytes = v->GetBufferSize();
-    char buf[totalBytes];
+    char *buf = new char[totalBytes];
     v->ToCharBuffer(buf);
-    zy::dms::CLFileManager::GetInstance()->Append(buf, totalBytes);
+    int row;
+    SLWriterMethodParam *p  =new SLWriterMethodParam;
+    p->buf = buf;
+    p->size = totalBytes;
+    p->callback= [&p](int row,char *buf,int size) {
+        std::cout<<"row:"<<row<<",size:"<<size<<std::endl;
+        delete []buf;
+        delete p;
+    };
+    zy::dms::CLFileManager::GetInstance()->MultiWrite(p);
 }
 int main(){
     srand((unsigned int)time(nullptr));
@@ -45,6 +54,6 @@ int main(){
     zy::dms::CLFileManager::GetInstance()->Read(2,buf,size);
     CLUserAttrVector desVec(colums_type);
     desVec.FromCharBuffer(buf);
-    desVec.Print();
+//    desVec.Print();
     return 0;
 }

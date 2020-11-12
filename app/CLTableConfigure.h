@@ -4,12 +4,20 @@
 
 #ifndef LINUX_DMS_CLTABLECONFIGURE_H
 #define LINUX_DMS_CLTABLECONFIGURE_H
-#include "CLFileManager.h"
+
+#include <sstream>
+#include "CLTableConfigure.h"
+#include "../utility/file/CLFile.h"
+#include "unordered_map"
+
+
+#define MAX_BUF_FILE_SIZE 256
 namespace zy{
     namespace dms{
         class CLTableConfigure {
         private:
             std::string _file_name;
+            bool _restart = false;
             void _Dump(int row_size,int max_rows_for_per_file,
                         int max_file_index,int cur_total_rows){
                 zy::file::CLFile file(_file_name);
@@ -25,7 +33,7 @@ namespace zy{
                     ss<<iter.first+':'+iter.second+'\n';
                 }
                 total = ss.str().length();
-                file.Write(&total, sizeof(int));
+                file.Write((char *)&total, sizeof(int));
                 file.Write(ss.str().c_str(),total);
                 file.Close();
             }
@@ -34,57 +42,57 @@ namespace zy{
             int _s_max_rows_for_per_file;
             int _max_file_index;
             long long _cur_total_rows;
-            CLTableConfigure(const std::string &filename = CLFileManager::_s_meta_data_file_prefix+
-                                                           CLFileManager::_s_dms_prefix+".txt"){
+            CLTableConfigure(const std::string &filename = "meta_data.txt"){
                 _file_name = filename;
-                try {
-                    if (!FromStorage()) {
-                        std::cout<<"current no configure file("<<filename<<")"<<std::endl;
-                    }
-                }catch (std::string&e){
-                    std::cout<<e<<std::endl;
-                    std::abort();
-                }
+            }
+            bool IsRestart(){
+                return _restart;
             }
             void ToStorage(){
                 _Dump(_s_row_size,_s_max_rows_for_per_file,
                       _max_file_index,_cur_total_rows);
             }
             bool FromStorage(){
-                zy::file::CLFile &file;
                 try{
-                   file = zy::file::CLFile(_file_name);
+                    zy::file::CLFile file(_file_name);
+                    if(file.IsEmpty()){
+                        return true;
+                    }
+                    char buf[MAX_BUF_FILE_SIZE];
+                    int real = 0;
+                    file.ReadAll(buf,MAX_BUF_FILE_SIZE,real);
+                    if(real == -1){
+                        return false;
+                    }
+                    bool isRecordingKey = true;
+                    std::string key,value;
+                    std::unordered_map<std::string,std::string> data;
+                    for(int i=0;i<real;i++){
+                        auto iter = buf[i];
+                        if(iter == '\n'){
+                            isRecordingKey = true;
+                            data.emplace(key,value);
+                            key.clear();
+                            value.clear();
+                        }else if(iter == ':'){
+                            isRecordingKey = false;
+                        }else{
+                            isRecordingKey?(key.push_back(iter)):(value.push_back(iter));
+                        }
+                    }
+                    try {
+                        _s_row_size = std::stoi(data.at("_s_row_size"));
+                        _s_max_rows_for_per_file = std::stoi(data.at("_s_max_rows_for_per_file"));
+                        _max_file_index = std::stoi(data.at("_max_file_index"));
+                        _cur_total_rows = std::stoll(data.at("_cur_total_rows"));
+                    }catch (std::out_of_range &e){
+                        throw std::string("configure file of "+_file_name+" has error:"+e.what());
+                    }
                 }catch (std::string &e){
                     std::cout<<__FUNCTION__<<":"<<e<<std::endl;
                     return false;
                 }
-                char header[sizeof(int)];
-                file.Read(0,header, sizeof(int));
-                file.Read(sizeof(int),buf,header);
-                bool isRecordingKey = true;
-                std::string key,value;
-                std::unordered_map<std::string,std::string> data;
-                for(int i=0;i<header;i++){
-                    auto iter = buf[i];
-                    if(iter == '\n'){
-                        isRecordingKey = true;
-                        data.emplace(key,value);
-                        key.clear();
-                        value.clear();
-                    }else if(iter == ':'){
-                        isRecordingKey = false;
-                    }else{
-                        isRecordingKey?(key.push_back(iter)):(value.push_back(iter));
-                    }
-                }
-                try {
-                    _s_row_size = data.at("_s_row_size");
-                    _s_max_rows_for_per_file = data.at("_s_max_rows_for_per_file");
-                    _max_file_index = data.at("_max_file_index");
-                    _cur_total_rows = data.at("_cur_total_rows");
-                }catch (std::out_of_range &e){
-                    std::throw(std::string("configure file of "+_file_name<<" has error:"<<e.what());
-                }
+                _restart = true;
                 return true;
             }
         };
