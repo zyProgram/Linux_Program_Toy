@@ -36,6 +36,7 @@ namespace zy{
             static int _s_row_size;
             friend class CLTableConfigure;
             CLTableConfigure _configure;
+            CLTableMetaData _meta_file;
             /**
              * 嵌套类实现 内存回收，通过静态的嵌套类 析构来 delete instance，也可以用atexist()
              */
@@ -69,7 +70,7 @@ namespace zy{
 
             bool _ExtendLocalCLFile();
         public:
-            CLFileManager(int num=2)
+            CLFileManager(int num=std::thread::hardware_concurrency())
             {
                 //TODO 处理文件夹
                 _worker_pool = new thread::CLThreadPool(num);
@@ -96,6 +97,7 @@ namespace zy{
                         delete (iter->second);
                     }
                 }
+                ToStorage();
                 delete _worker_pool;
             }
             static int GetRowSize(){
@@ -113,17 +115,18 @@ namespace zy{
             }
             static CLFileManager *GetInstance();
             void ToStorage(){
-                _configure._cur_total_rows = _cur_total_rows;
-                _configure._max_file_index = _max_file_index;
-                _configure._s_max_rows_for_per_file = CLFileManager::_s_max_rows_for_per_file;
-                _configure._s_row_size = CLFileManager::_s_row_size;
+                _configure.SetConfigure(CLFileManager::_s_max_rows_for_per_file,
+                        CLFileManager::_s_row_size);
                 _configure.ToStorage();
+
+                _meta_file.SetMetaData(_cur_total_rows);
+                _meta_file.ToStorage();
             }
             bool FromStorage(){
                 auto flag = _configure.FromStorage();
                 if(flag){
-                    _s_row_size = _configure._s_row_size;
-                    _s_max_rows_for_per_file = _configure._s_max_rows_for_per_file;
+                    CLFileManager::_s_row_size = _configure._config_row_size;
+                    CLFileManager::_s_max_rows_for_per_file = _configure._config_max_rows_for_per_file;
                 }
             }
             bool Append(int row,const char *buffer,int total){

@@ -23,7 +23,7 @@ namespace zy{
                 std::cout<<"submit a task on stoped thread pool"<<std::endl;
                 return false;
             }
-            CLLockGuard lockGuard(_task_submit_get_lock);
+            CLLockGuard lockGuard(&_task_submit_get_lock);
             _task_queue.push(func);
             _has_task_event.Set();
             _submit_task_num++;
@@ -31,7 +31,7 @@ namespace zy{
         }
 
         bool CLThreadPool::GetFunc(CLExcutiveAbstractFunc *func) {
-            CLLockGuard lockGuard(_task_submit_get_lock);
+            CLLockGuard lockGuard(&_task_submit_get_lock);
             if(_task_queue.empty()){
                 func = nullptr;
                 std::cout<<"hard to be here theortily,when shutdown or ctrl-c"<<std::endl;

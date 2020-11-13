@@ -6,6 +6,8 @@
  */
 #ifndef CUTIL_CLEVENT_H
 #define CUTIL_CLEVENT_H
+
+#include <iostream>
 #include "CLLock.h"
 #include "CLConditionVar.h"
 #include "CLLockGuard.h"
@@ -25,7 +27,7 @@ namespace zy{
              * @return
              */
             void Set(){
-                CLLockGuard lockGuard(_lock);
+                CLLockGuard lockGuard(&_lock);
                 _count++;
                 _condition.Notify_One();
             }
@@ -33,9 +35,12 @@ namespace zy{
              * 有信号就处理，退化成信号量机制
              */
             void Wait(){
-                CLLockGuard lockGuard(_lock);
+                CLLockGuard lockGuard(&_lock);
                 while (_count == 0){
-                    _condition.Wait(_lock);
+                    if(!_condition.Wait(_lock)){
+                        std::cout<<"event wait fail"<<std::endl;
+                        std::abort();
+                    }
                 }
                 _count--;
             }

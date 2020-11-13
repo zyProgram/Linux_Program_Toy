@@ -9,17 +9,17 @@ namespace zy{
     namespace thread{
         class CLLockGuard {
         private:
-            CLLock &_lock;
+            CLLock *_lock;
         public:
-            CLLockGuard(CLLock &lock):_lock(lock){
+            CLLockGuard(CLLock *lock):_lock(lock){
                 try {
-                    lock.Lock();
+                    _lock->Lock();
                 } catch (std::string &errMsg) {
                     throw errMsg;
                 }
             }
             ~CLLockGuard(){
-                _lock.UnLock();
+                _lock->UnLock();
             }
         };
     }
