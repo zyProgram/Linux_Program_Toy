@@ -48,7 +48,7 @@ namespace zy{
                 CLThreadPool *pool = (CLThreadPool *)(__runningContext);
                 while (_running){
                     pool->_task_submit_get_lock.Lock();
-                    if(pool->GetQueueSize() == 0){
+                    while(pool->GetQueueSize() == 0){ //防止唤醒后，任务被其他工人抢了，导致没有任务
                         pool->_has_task_condition_var.Wait(pool->_task_submit_get_lock);
                     }
                     if(_running){

@@ -29,6 +29,8 @@ namespace zy{
             }
             static CLLogger* _s_logger;
             static thread::CLLock *_s_create_logger_lock;
+            void _WritePrefix();
+            void _WriteSuffix();
         public:
             static CLLogger *GetInstance();
             static void OnExit();

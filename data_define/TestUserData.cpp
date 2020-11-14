@@ -5,6 +5,7 @@
 #include "CLObject.h"
 #include "ctime"
 #include "../app/CLFileManager.h"
+#include "../utility/file/CLLogger.h"
 using namespace zy::dms;
 void storage(zy::dms::CLUserAttrVector *v) {
     int totalBytes = v->GetBufferSize();
@@ -15,7 +16,10 @@ void storage(zy::dms::CLUserAttrVector *v) {
     p->buf = buf;
     p->size = totalBytes;
     p->callback= [](int row,char *buf,int size) {
-        std::cout<<"write row:"<<row<<",size:"<<size<<" success"<<std::endl;
+        std::string writeBuf;
+        writeBuf += "write row:"+std::to_string(row)+",size:"+std::to_string(size)+" success";
+        std::cout<<writeBuf<<std::endl;
+        zy::file::CLLogger::GetInstance()->WriteLog(writeBuf.c_str(),writeBuf.length());
         delete []buf;
     };
     zy::dms::CLFileManager::GetInstance()->MultiWrite(p);
@@ -23,7 +27,7 @@ void storage(zy::dms::CLUserAttrVector *v) {
 int main(){
     srand((unsigned int)time(nullptr));
     int totalRow = 1000;
-    //construct 100 attribute type of one row
+    //创建表结构
     std::vector<CLObjectType> colums_type;
     colums_type.reserve(100);
     for(int i=0;i<100;i++){
