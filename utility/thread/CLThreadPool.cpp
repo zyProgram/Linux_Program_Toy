@@ -8,7 +8,7 @@ namespace zy{
         CLThreadPool::CLThreadPool(int taskNum) {
             for(int i=1;i<=taskNum;i++){
                 try {
-                    auto *loopWork = new CLRwFunc(i,&_has_task_event);
+                    auto *loopWork = new CLRwFunc(i,this);
                     auto *worker = new CLThreadExcutive(loopWork);
                     _worker_queue.push_back(worker);
                 } catch (std::exception &e) {
@@ -25,19 +25,18 @@ namespace zy{
             }
             CLLockGuard lockGuard(&_task_submit_get_lock);
             _task_queue.push(func);
-            _has_task_event.Set();
+            _has_task_condition_var.Notify_One();
             _submit_task_num++;
             return true;
         }
 
-        bool CLThreadPool::GetFunc(CLExcutiveAbstractFunc *func) {
-            CLLockGuard lockGuard(&_task_submit_get_lock);
+        bool CLThreadPool::GetFunc(CLExcutiveAbstractFunc **func) {
             if(_task_queue.empty()){
                 func = nullptr;
                 std::cout<<"hard to be here theortily,when shutdown or ctrl-c"<<std::endl;
                 return false;
             }
-            func = _task_queue.front();
+            *func = _task_queue.front();
             _task_queue.pop();
             return true;
         }
@@ -57,6 +56,8 @@ namespace zy{
             for(int i=0;i<_worker_queue.size();i++){
                 delete _worker_queue[i];
             }
+            //delete 会让所有线程的while(true)中的isruning进入false状态，然后重新唤起所有处于wait的线程进行退出
+            _has_task_condition_var.Notify_All();
             return true;
         }
     }

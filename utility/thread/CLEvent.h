@@ -15,19 +15,20 @@ namespace zy{
     namespace thread{
         class CLEvent {
         private:
-            CLLock _lock;
+            CLLock* _lock = nullptr;
             CLConditionVar _condition;
             int _count;
         public:
             CLEvent(){
                 _count = 0;
+                _lock = new CLLock;
             }
             /**
              * Set可以被多次调用，形成多条通知消息
              * @return
              */
             void Set(){
-                CLLockGuard lockGuard(&_lock);
+                CLLockGuard lockGuard(_lock);
                 _count++;
                 _condition.Notify_One();
             }
@@ -35,17 +36,19 @@ namespace zy{
              * 有信号就处理，退化成信号量机制
              */
             void Wait(){
-                CLLockGuard lockGuard(&_lock);
+//                CLLockGuard lockGuard(&_lock);
+                _lock->Lock();
                 while (_count == 0){
-                    if(!_condition.Wait(_lock)){
+                    if(!_condition.Wait(*_lock)){
                         std::cout<<"event wait fail"<<std::endl;
                         std::abort();
                     }
                 }
                 _count--;
+                _lock->UnLock();
             }
             ~CLEvent(){
-
+                delete _lock;
             }
         };
     }

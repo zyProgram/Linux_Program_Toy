@@ -96,6 +96,7 @@ namespace zy{
             bool ReadRow(int rowLine, char *buffer, int size) override{
                 if(size < _row_size - _s_header_size - _s_suffix_size){
                     std::cout<<"invalid read parameter : "<<size<< " < "<<_row_size - _s_header_size - _s_suffix_size <<std::endl;
+                    std::abort();
                     return false;
                 }
                 int offset = _row_size * (((rowLine-1) > 0) ? rowLine-1:0);

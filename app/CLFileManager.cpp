@@ -10,12 +10,13 @@ zy::thread::CLLock zy::dms::CLFileManager::_s_create_instance_lock;
 zy::dms::CLFileManager* zy::dms::CLFileManager::_s_instance = nullptr;
 int zy::dms::CLFileManager::_s_row_size = 0;
 std::string zy::dms::CLFileManager::_s_meta_data_file_prefix = "_meta_data_of_";
-
+zy::dms::CLFileManager::CLManagerGC zy::dms::CLFileManager::_s_gc;
+int zy::dms::CLFileManager::_s_auto_increace_file_num = 4;
 namespace zy{
     namespace dms {
         bool CLFileManager::_ExtendLocalCLFile() {
             int orginIndex = _max_file_index;
-            _max_file_index += 10;
+            _max_file_index += _s_auto_increace_file_num;
             try {
                 std::string filename;
                 for (int i = orginIndex + 1; i <= _max_file_index; i++) {
@@ -36,7 +37,13 @@ namespace zy{
             }
             int index = row / (CLFileManager::_s_max_rows_for_per_file + 1) + 1;
             std::string filename = _ConstructFileName(index);
-            *pFile = _file_manager.at(filename);
+            try {
+                *pFile = _file_manager.at(filename);
+            }catch(std::out_of_range &e) {
+                std::cout<<"dms catch "<<e.what()<<" when read "<<filename<<",so create file for reader"<<std::endl;
+                *pFile = new CLTableFile(filename,CLFileManager::_s_row_size);
+                _file_manager.emplace(filename,*pFile);
+            }
             return true;
         }
 
@@ -69,7 +76,7 @@ namespace zy{
             }
 
             if (pCLFile->WriteRow(msg)) {
-                _cur_total_rows += 1;
+                IncreaseRow();
             } else {
                 return false;
             }

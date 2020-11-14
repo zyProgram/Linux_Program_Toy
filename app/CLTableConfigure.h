@@ -30,9 +30,7 @@ namespace zy{
                     ss<<iter.first+':'+iter.second+'\n';
                 }
                 total = ss.str().length();
-                file.Write((char *)&total, sizeof(int));
-                file.Write(ss.str().c_str(),total);
-                file.Close();
+                file.Write(ss.str().c_str(),(int)total);
             }
         public:
             int _config_row_size;
@@ -51,12 +49,11 @@ namespace zy{
                 try{
                     zy::file::CLFile file(_file_name);
                     if(file.IsEmpty()){
-                        return true;
+                        return false;
                     }
-                    char buf[MAX_BUF_FILE_SIZE];
-                    int real = 0;
-                    file.ReadAll(buf,MAX_BUF_FILE_SIZE,real);
-                    if(real == -1){
+                    char buf[MAX_BUF_FILE_SIZE]={0};
+                    ssize_t real = 0;
+                    if(!file.ReadAll(buf,MAX_BUF_FILE_SIZE,real)){
                         return false;
                     }
                     bool isRecordingKey = true;
@@ -104,9 +101,7 @@ namespace zy{
                     ss<<iter.first+':'+iter.second+'\n';
                 }
                 total = ss.str().length();
-                file.Write((char *)&total, sizeof(int));
                 file.Write(ss.str().c_str(),total);
-                file.Close();
             }
         public:
             long long _cur_total_rows;
@@ -128,10 +123,9 @@ namespace zy{
                     if(file.IsEmpty()){
                         return true;
                     }
-                    char buf[MAX_BUF_FILE_SIZE];
-                    int real = 0;
-                    file.ReadAll(buf,MAX_BUF_FILE_SIZE,real);
-                    if(real == -1){
+                    char buf[MAX_BUF_FILE_SIZE]={0};
+                    ssize_t real = 0;
+                    if(!file.ReadAll(buf,MAX_BUF_FILE_SIZE,real)){
                         return false;
                     }
                     bool isRecordingKey = true;

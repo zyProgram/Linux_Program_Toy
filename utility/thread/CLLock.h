@@ -34,9 +34,10 @@ namespace zy {
             }
 
             void Lock() {
-                if (0 != pthread_mutex_lock(&_mutex)) {
+                int err = pthread_mutex_lock(&_mutex);
+                if (err != 0) {
                     std::string errMsg = "pthread_mutex_lock error:";
-                    errMsg += strerror(errno);
+                    errMsg += strerror(err);
                     throw errMsg;
                 }
                 _locked = true;
@@ -44,9 +45,11 @@ namespace zy {
 
             void UnLock() {
                 if (_locked) {
-                    if (0 != pthread_mutex_unlock(&_mutex)) {
+                    int err = 0;
+                    err = pthread_mutex_unlock(&_mutex);
+                    if (err != 0) {
                         std::string errMsg = "pthread_mutex_unlock error:";
-                        errMsg += strerror(errno);
+                        errMsg += std::to_string(err);
                         throw errMsg;
                     }
                 } else {

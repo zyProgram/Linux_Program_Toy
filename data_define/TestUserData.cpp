@@ -11,13 +11,12 @@ void storage(zy::dms::CLUserAttrVector *v) {
     char *buf = new char[totalBytes];
     v->ToCharBuffer(buf);
     int row;
-    SLWriterMethodParam *p  =new SLWriterMethodParam;
+    auto *p = new SLWriterMethodParam;
     p->buf = buf;
     p->size = totalBytes;
-    p->callback= [&p](int row,char *buf,int size) {
-        std::cout<<"row:"<<row<<",size:"<<size<<std::endl;
+    p->callback= [](int row,char *buf,int size) {
+        std::cout<<"write row:"<<row<<",size:"<<size<<" success"<<std::endl;
         delete []buf;
-        delete p;
     };
     zy::dms::CLFileManager::GetInstance()->MultiWrite(p);
 }
@@ -44,16 +43,13 @@ int main(){
             auto *intObject = factory.CreateObject(rand()%100);
             v->PushBack(intObject);
         }
-        if(i==1){
-            v->Print();
-        }
         storage(v.get());
     }
     int size = 400;
     char buf[size];
-    zy::dms::CLFileManager::GetInstance()->Read(2,buf,size);
+    zy::dms::CLFileManager::GetInstance()->Read(1994,buf,size);
     CLUserAttrVector desVec(colums_type);
     desVec.FromCharBuffer(buf);
-//    desVec.Print();
+    desVec.Print();
     return 0;
 }

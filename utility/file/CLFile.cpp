@@ -35,7 +35,7 @@ bool zy::file::CLFile::Write(const char *buffer, int total) {
 bool zy::file::CLFile::_NormalWrite(const char *buffer, ssize_t size) {
     ssize_t bytes = ::write(_open_file_handle, buffer, size);
     if(bytes < 0){
-        std::cout<<"write file "<<_filename<< " failed"<<std::endl;
+        std::cout<<"write file "<<_filename<< " failed:"<<strerror(errno)<<std::endl;
         //TODO:错误处理
     }
     memset(_buffer,0,MAX_FILE_BUF_SIZE);
@@ -73,7 +73,7 @@ void zy::file::CLFile::Clear() {
     lseek(_open_file_handle,0,SEEK_SET);
 }
 
-bool zy::file::CLFile::ReadAll(char *buffer, int total, int realCount) {
+bool zy::file::CLFile::ReadAll(char *buffer, int total, ssize_t &realCount) {
     off_t off = lseek(_open_file_handle,0,SEEK_SET);
     realCount = read(_open_file_handle,buffer,total);
     if (realCount < 0){
