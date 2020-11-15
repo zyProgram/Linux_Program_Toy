@@ -34,19 +34,68 @@
 
 ### 2.1 按照需求，总体设计
 
+按照功能需求，整个程序以对多个文件的读写操作为基础，实现对大型数据的操作。因此以文件操作为基础，对外暴露文件表操作的形式，形成了完整的数据管理系统(Data Manage System,后文简称DMS)。 
+
+针对各个功能点，设计如下
+
+1、存储的解决：
+
+​	封装系统API接口，实现基本文件的操作，然后封装成行写入的形式，方便用户以结构化的数据写入。同时，系统关机后，相关的存储数据需要被回复，所以需要记录元数据和用户第一次的配置数据。
+
+2、并发。
+
+​	底层提供线程池，线程池存在任务队列，所有工作线程去抢夺线程池中的任务，工作线程数量应该为当前每个CPU核数 x CPU数量。
+
+3、索引
+
+​	整个数据的索引以b+树实现，B+树按照数据和存储的行号形成键值对进行存储。用户可以指定任意一列数据属性作为键值，每一次append操作会为数据添加一个行号，行号作为索引的value。然后通过调用底层存储的表数据进行查询。
+
+4、统一接口
+
+​	封装一个Manager调度底层资源，同时向上层提供整个系统的append和read功能，实现时，既对外既可以暴露出阻塞的接口又提供非阻塞的多线程接口。
+
 ### 2.2 总体设计框图
+
+按照设计，我们自上往下将DMS设计如下图所示
+
+ ![model](pic\model.bmp)
+
+
 
 ### 2.3 各模块简介
 
- 
+ 1、文件管理模块
+
+负责处理文件的打开，创建，关闭，数据写入，数据读取，刷新到磁盘等基本操作
+
+负责对应用所需要存储的数据进行封装，由于各种类型的文件对于底层文件操作的需求不一样，使用如下
+
+| 模块      | 文件操作需求                                                 |
+| :-------- | ------------------------------------------------------------ |
+| Logger    | 写入数据内容需要添加时间戳前缀，和回车后缀                   |
+| metadata  | 能够进行readall操作，从磁盘中读取元数据所有字节到buffer中    |
+| configure | 配置文件的需求同metadata                                     |
+| tableFile | 写入数据需要添加4字节行号作为前缀，回车作为后缀，所有数据按照行存储。 |
+
+2、文件操作统一管理模块
+
+负责用于对内进行各个逻辑块的调用，协调内部各个类的运作，如数据重启的恢复，多线程任务的提交。
+
+负责对外的统一接口，用户可以直接通过本模块进行的原始数据的操作，涉及创建，插入，读取，建立索引等。
+
+3、接口层
+
+本层主要面向用户，提供了方便的用户数据构建，如创建一个double类型，char类型，int类型的数据，构建出的数据可以更方便地变成用户的行号，本程序主要使用100个int形成的vector作为用户的基本属性列表。通过该层可以方便地将数据转换为字节流，更加简便地存入文件中。
 
 ## 3 详细设计与实现
 
-本章节主要介绍代码的主要功能实现逻辑，首先介绍了本次代码的书写规范，然后采用了代码实现的时间先后，采用自下而上的封装方式叙述整个代码各个模块的详细实现。
+本章节主要介绍代码的主要功能实现逻辑，首先介绍了本次代码的书写规范，然后采用了代码实现的时间先后，采用自下而上的封装方式叙述整个代码各个模块的详细实现。整个代码的类图实现如下图所示
+
+![alluml](pic\alluml.bmp)
 
 ### 3.1代码规范
 
-在介绍代码设计之前，由于代码不是一次性书写完成，前后周期跨度约为一个月，为了让代码更加整洁，开发方便。首先需要约定好代码规范。在代码实现时，使用本学期李林老师课上常用代码规范，结合自身比较熟练的代码标准，现将本程序所考虑到的代码规范规约如下
+​	在介绍代码设计之前，由于代码不是一次性书写完成，前后周期跨度约为一个月，为了让代码更加整洁，开发方便。首先需要约定好代码规范。在代码实现时，使用本学期李林老师课上常用代码规范，结合自身比较熟练的代码标准，现将本程序所考虑到的代码规范规约如下
 
 **1、类的命名采用CL开头，后接大驼峰标识的名字。如文件管理模块类'CLFileManger'  、文件表处理类 'CLTableFile '、基础文件类'CLFile'等**
 
@@ -79,9 +128,13 @@ void Close();
 void Clear();
 ```
 
+#### 3.2.1 文件模块类图
 
 
-#### 3.2.1 底层文件模块流程
+
+![file](pic\file.bmp)
+
+
 
 #### 3.2.2 核心代码
 
@@ -128,7 +181,7 @@ bool zy::file::CLFile::Read(long offset, char *buffer, int total) {
 }
 ```
 
-### 3.3 表文件数据读写模块
+#### 3.2.3 表文件数据读写模块
 
 有了底层的文件封装，那么我们可以简单地进行基础数据的读写，而需求是按照数据进行一行一行写入或者一行一行进行读取，整个数据以行作为单位进行读写
 
@@ -143,9 +196,9 @@ bool WriteRow(const std::string &msg);
 bool ReadRow(int rowLine, char *buffer, int size);
 ```
 
-#### 3.3.1表文件数据读写流程图
+#### 3.2.4表文件数据读写流程图
 
-#### 3.3.3 核心代码
+#### 3.2.5 核心代码
 
 读取一行数据，根据行号计算出偏移量，读取一整行数据
 
@@ -182,7 +235,7 @@ bool WriteRow(const char *buffer, int size) override{
 }
 ```
 
-### 3.4 多线程模块实现
+### 3.3 多线程模块实现
 
 由于磁盘io达到了毫秒级别的时间消耗，如果以阻塞的方式让用户调用api接口，那么达到缓存上限4096字节的那一次写操作必然消耗了毫秒级别的时间。所以设定了多线程模块，该模块主要包含一个多线程池，对外提供以下接口
 
@@ -193,11 +246,11 @@ bool GetFunc(CLExcutiveAbstractFunc **func);//用于线程池中每个线程进�
 bool ShutDown();//程序退出时关闭线程池，一般在析构函数中自动执行
 ```
 
+#### 3.3.1 多线程模块类图
 
+![threadpool](pic\threadpool.png)
 
-#### 3.4.1 多线程模块流程图
-
-### 3.4.2 核心代码
+### 3.3.2 核心代码
 
 线程池中的每一个线程运行相同的逻辑，主要功能用于抢夺线程池中的任务进行执行，此处主要是读写任务
 
@@ -227,8 +280,6 @@ virtual void RunFuncEntity() {
     std::cout << "thread " << _id << " quit,total handle work number:" << _total_task_num << std::endl;
 }
 ```
-
-
 
 暴露给上层的线程池启动接口，主要实现各个工作线程的启动，线程池Start()逻辑代码如下
 
@@ -261,13 +312,13 @@ bool CLThreadPool::Submit(CLExcutiveAbstractFunc *func) {
 
 
 
-### 3.5 日志模块实现
+### 3.4 日志模块实现
 
 日志模块基于底层的文件模块，由于整个日志模块只存在一个，因此采用了单例的实现方式
 
-#### 3.5.1 日志模块流程图
+#### 3.4.1 日志模块流程图
 
-#### 3.5.2 核心代码
+#### 3.4.2 核心代码
 
 单例的GetInstance,采用DCL双检测锁实现
 
@@ -312,21 +363,380 @@ void zy::file::CLLogger::_WritePrefix() {
 }
 ```
 
-### 3.6 B树索引模块实现
+### 3.5 B树索引模块实现
 
-#### 3.6.1 索引模块流程图
+B树索引模块，主要将用户的属性信息映射成文件存储的行号，该模块主要对外提供的接口如下所示
+
+```c++
+void createIndex(std::vector<int64_t> datePtr, std::vector<int> row);
+bool insert(KeyType key, const DataType &data);
+//范围查找，输入为上下界的key值和指示是否包含上下界的bool变量。
+bool select(KeyType lowerBound, KeyType upperBound, bool lowerContain, bool upperContain, std::vector<DataType>& selectResult);
+bool select(KeyType key, SELECT_TYPE selectType, std::vector<DataType>& selectResult);
+```
+
+
+
+#### 3.5.1 索引模块类图
+
+![index](pic\index.png)
+
+#### 3.5.2 核心代码
+
+插入一个node节点
+
+ ```c++
+bool CLbplusTree::insertToNode(CLbplusTreeNode* node, KeyType key, const DataType& data)
+{
+	if (node == NULL){
+		return false;
+	}
+	if (node->getIsLeaf()) {
+		((CLbplusTreeLeafNode*)node)->insert(key, data);
+	}
+	else {
+		CLbplusTreeInnerNode* innerNode = ((CLbplusTreeInnerNode*)node);
+		int keyIndex = innerNode->getKeyIndex(key);
+		int childIndex = innerNode->getChildIndex(key, keyIndex); 
+		CLbplusTreeNode* childNode = innerNode->getChild(childIndex);
+		if (childNode->getKeyNum() >= UPPER_BOUND_KEYNUM){
+			childNode->split(node, childIndex);
+			if (node->getKeyValue(keyIndex) <= key)  
+			{
+				childNode = innerNode->getChild(childIndex + 1);
+			}
+		}
+		insertToNode(childNode, key, data);
+	}
+	return true;
+}
+ ```
+
+叶子节点终端数据的插入
+
+```c++
+void CLbplusTreeLeafNode::insert(KeyType key, const DataType& data)
+{
+	int i;
+	for (i = m_KeyNum; i >= 1 && m_KeyValues[i - 1] > key; --i){
+		setKeyValue(i, m_KeyValues[i - 1]);
+		setData(i, m_Datas[i - 1]);
+	}
+	setKeyValue(i, key);
+	setData(i, data);
+	setKeyNum(m_KeyNum + 1);
+
+	if (getKeyNum() > UPPER_BOUND_KEYNUM){
+		CLbplusTreeNode* parentNode = getParentNode();
+		if (parentNode != NULL)
+		{
+			int keyIndex = parentNode->getKeyIndex(key);
+			int childIndex = parentNode->getChildIndex(key, keyIndex);
+			split(parentNode, childIndex);
+
+		}
+		else {
+			CLbplusTreeInnerNode* innerNode = new CLbplusTreeInnerNode();
+			innerNode->setChild(0, this);
+			split(innerNode, 0);
+			setParentNode(innerNode);
+		}
+	}
+
+
+}
+```
+
+
+
+### 3.6 统一用户层数据实现
+
+统一用户层数据模块为用户提供了各种数据操作，作为用户使用的模块，提供的主要接口如下所示
+
+```c++
+struct SLReaderMethodParam{
+    int row;
+    std::function<void(char *buf,int size)> callback;
+};
+struct SLWriterMethodParam{
+    char *buf;
+    int size;
+    std::function<void(int row,char *buf,int size)> callback;
+};
+bool Append(int &row,const char *buffer,int total)
+bool Read(int row,char *buf,int size);
+/*
+* multi thread api
+* */
+bool MultiRead(SLReaderMethodParam *param);
+
+bool MultiWrite(SLWriterMethodParam *param);
+```
+
+#### 3.6.1统一用户层数据实现类图
+
+![file](pic\file.bmp)
 
 #### 3.6.2 核心代码
 
- 
+append插入数据
 
-### 3.7 统一用户层数据实现
+```c++
+bool Append(int &row,const char *buffer,int total){
+    CLAbstractTableFile *pCLFile;
 
-统一用户层数据模块为用户提供了各种数据操作，作为用户使用的模块
+    if(!_FindCurCLFile(&pCLFile)){
+        _ExtendLocalCLFile();
+        _FindCurCLFile(&pCLFile);
+    }
+    if(pCLFile->WriteRow(buffer,total)){
+        row = IncreaseRow();
+    } else{
+        return false;
+    }
+    if(_EqualMaxRow()){
+        pCLFile->Flush();
+    }
+    return true;
+}
+```
 
-#### 3.7.1 统一数据接口流程图
+read数据
 
-#### 3.7.2 核心代码
+```c++
+bool CLFileManager::Read(int row, char *buf, int size) {
+    CLAbstractTableFile *pCLFile;
+    if (!_FindCLFile(row, &pCLFile)) {
+        return false;
+    }
+    int calRow = row % (CLFileManager::_s_max_rows_for_per_file);
+    calRow = ((calRow == 0) ? CLFileManager::_s_max_rows_for_per_file : calRow); //最后一行
+
+    return pCLFile->ReadRow(calRow, buf, size);
+}
+```
+
+异步读任务封装，用户进行多线程读取时，本模块提交的读任务
+
+```c++
+class CLMutilReaderFunc: public thread::CLExcutiveAbstractFunc{
+    public:
+    CLMutilReaderFunc(void *pContext):CLExcutiveAbstractFunc(pContext){}
+    void RunFuncEntity(){
+        SLReaderMethodParam *method = (SLReaderMethodParam*)(__runningContext);
+        char buf[CLFileManager::GetRowSize()];
+        CLFileManager::GetInstance()->Read(method->row,buf,CLFileManager::GetRowSize());
+        method->callback(buf,CLFileManager::GetRowSize());
+    }
+    ~CLMutilReaderFunc() = default;
+};
+```
+
+异步写任务封装,用户进行多线写数据时，本模块提交的写任务
+
+```c++
+class CLMutilWriterFunc: public thread::CLExcutiveAbstractFunc{
+    public:
+    CLMutilWriterFunc(void *pContext):CLExcutiveAbstractFunc(pContext){}
+    void RunFuncEntity(){
+        SLWriterMethodParam *method = (SLWriterMethodParam*)(__runningContext);
+        int row = 0;
+        if(CLFileManager::GetInstance()->Append(row,method->buf,method->size)){
+            method->callback(row,method->buf,method->size);
+        }
+        delete method;
+    }
+    ~CLMutilWriterFunc() = default;
+};
+```
+
+
+
+### 3.7统一数据构建
+
+用户需要方便地构建100个int数据，并且快速将这100个数据变成字节流存储到文件中，本层主要提供一下接口
+
+```c++
+CLAbstractObject *CreateObject(const T &attr);
+void PushBack(CLAbstractObject *p);
+void ToCharBuffer(char *buf) ;
+void FromCharBuffer(const char *buf);
+```
+
+#### 3.7.1数据构建实现类图
+
+![construct](pic\construct.bmp)
+
+3.7.2核心代码
+
+抽象对象接口
+
+```c++
+class CLAbstractObject {
+    public:
+    virtual void ToCharBuffer(std::string &buf) = 0;
+    virtual void ToCharBuffer(char *buf) = 0;
+    virtual void FromCharBuffer(const char *buf) = 0;
+    virtual void FromCharBuffer(const std::string &str) = 0;
+    virtual int32_t GetBufferSize() = 0;
+    virtual void Print()=0;
+    virtual ~CLAbstractObject() = default;
+};
+```
+
+数据对象实现
+
+```c++
+template <typename T,typename std::enable_if<std::is_pod<T>::value>* = nullptr>
+    class CLDataObject: public CLAbstractObject{
+        private:
+        T _data;
+        public:
+        CLDataObject(T data){
+            _data=data;
+        }
+        ~CLDataObject()=default;
+
+        CLDataObject(const CLDataObject & o){
+            _data = o.__data;
+        }
+        void ToCharBuffer(std::string &buf){
+            memcpy((char *)(buf.c_str()), &_data, GetBufferSize());
+        }
+        void ToCharBuffer(char *buf){
+            memcpy((char *)(buf), &_data, GetBufferSize());
+        }
+        void FromCharBuffer(const char *buf){
+            memcpy(&_data, buf, GetBufferSize());
+        }
+        void FromCharBuffer(const std::string &buf){
+            assert(buf.length()>=4);
+            memcpy(&_data, buf.c_str(), GetBufferSize());
+        }
+        int32_t GetBufferSize(){
+            return sizeof(T);
+        }
+        void Print(){
+            std::cout<<"data:"<<_data<<" size:"<<GetBufferSize()<<std::endl;
+        }
+    };
+```
+
+用户构建数据的数据工厂
+
+```c++
+class CLObjectProduceFactory{
+    public:
+    template <typename T>
+    CLAbstractObject *CreateObject(const T &attr){
+        return new CLDataObject<T>(attr);
+    }
+};
+```
+
+用户的一整行属性数据存储
+
+```c++
+class CLUserAttrVector: public CLAbstractObject{
+    private:
+    static std::unordered_map<CLObjectType,size_t> _s_type_size_map;
+    std::vector<CLAbstractObject *> _user_attr_vector;
+    std::vector<CLObjectType> _user_attr_type;
+    int _total_size=0;
+    public:
+    explicit CLUserAttrVector(const std::vector<CLObjectType> &type){
+        _user_attr_type.reserve(type.size());
+        for(auto &iter:type){
+            _user_attr_type.push_back(iter);
+            _total_size+=CLUserAttrVector::_s_type_size_map[iter];
+        }
+    }
+    CLUserAttrVector(const CLUserAttrVector &) = delete;
+    CLUserAttrVector &operator=(const CLUserAttrVector &) = delete;
+    CLUserAttrVector(CLUserAttrVector &&o){
+        for(auto &iter:o._user_attr_vector){
+            o.PushBack(iter);
+        }
+    }
+    ~CLUserAttrVector(){
+        Clear();
+    }
+    void Clear(){
+        for(auto &iter:_user_attr_vector){
+            if(iter!= nullptr){
+                delete iter;
+                iter = nullptr;
+            }
+        }
+    }
+    void PushBack(CLAbstractObject *p){
+        _user_attr_vector.push_back(p);
+    }
+    void ToCharBuffer(std::string &buf){
+        if(buf.capacity() < GetBufferSize()){
+            buf.reserve(GetBufferSize() - buf.capacity());
+        }
+        int offset = 0;
+        for(auto &iter:_user_attr_vector){
+            int bufsize =iter->GetBufferSize();
+            char tempbuf[bufsize];
+            iter->ToCharBuffer(tempbuf);
+            memcpy((char*)(buf.data()+offset),tempbuf,bufsize);
+            offset+=bufsize;
+        }
+    }
+    void ToCharBuffer(char *buf){
+        int offset = 0;
+        for(auto &iter:_user_attr_vector){
+            iter->ToCharBuffer(buf+offset);
+            offset+=iter->GetBufferSize();
+        }
+    }
+    void FromCharBuffer(const char *buf){
+        Clear();
+        int offset = 0;
+        CLObjectProduceFactory factory;
+        _user_attr_vector.reserve(_user_attr_type.size());
+        for(auto &iter:_user_attr_type){
+            if(iter == CLObjectType::Int){
+                auto *p = factory.CreateObject<int>(0);
+                p->FromCharBuffer(buf+offset);
+                offset+=p->GetBufferSize();
+                _user_attr_vector.push_back(p);
+            }
+        }
+    }
+    void FromCharBuffer(const std::string &buf){
+        Clear();
+        assert(buf.capacity() >= GetBufferSize());
+        int offset = 0;
+        for(auto &iter:_user_attr_vector){
+            iter->FromCharBuffer(buf.data()+offset);
+            offset+=iter->GetBufferSize();
+        }
+    }
+    int32_t GetBufferSize(){
+        if(_total_size == 0) {
+            int total = 0;
+            for (auto &iter:_user_attr_type) {
+                total += CLUserAttrVector::_s_type_size_map[iter];
+            }
+            _total_size = total;
+        }
+        return _total_size;
+    }
+    void Print(){
+        std::cout<<"user attr vector info:"<<" size:"<<GetBufferSize()<<std::endl;
+        for(auto &iter:_user_attr_vector){
+            if(iter!= nullptr){
+                iter->Print();
+            }
+        }
+    }
+};
+```
+
+
 
 ## 4 测试
 
@@ -395,6 +805,4 @@ desVec.FromCharBuffer(buf);
 
 #### 4.3.2多线程测试
 
- 
 
- 
