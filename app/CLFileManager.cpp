@@ -12,6 +12,7 @@ int zy::dms::CLFileManager::_s_row_size = 0;
 std::string zy::dms::CLFileManager::_s_meta_data_file_prefix = "_meta_data_of_";
 zy::dms::CLFileManager::CLManagerGC zy::dms::CLFileManager::_s_gc;
 int zy::dms::CLFileManager::_s_auto_increace_file_num = 4;
+int zy::dms::CLFileManager::_s_thread_num;
 namespace zy{
     namespace dms {
         bool CLFileManager::_ExtendLocalCLFile() {
@@ -117,6 +118,5 @@ namespace zy{
             auto *func = new CLMutilWriterFunc(param);
             return _worker_pool->Submit(func);
         }
-
     }
 }

@@ -1,6 +1,7 @@
 //
-// Created by zhangyu on 2020/10/24.
+// Created by zhangyu on 2020/11/15.
 //
+
 #include <memory>
 #include <sys/time.h>
 #include "CLObject.h"
@@ -34,16 +35,18 @@ void storage(zy::dms::CLUserAttrVector *v,bool multiFlag=true) {
     }
 }
 
-void Reader(int row,bool multiFlag = true) {
+void Reader(long row,bool multiFlag = true) {
     auto *p = new SLReaderMethodParam;
     p->row = row;
-    p->callback = [&p](char *buf,int size) {
+    p->callback = std::move([p](char *buf,int size) {
         std::string writeBuf;
         writeBuf += "multi thread read row:"+std::to_string(p->row)+",size:"+std::to_string(size)+" success";
         std::cout<<writeBuf<<std::endl;
+        if(p->row>10000){
+            std::abort();
+        }
         zy::file::CLLogger::GetInstance()->WriteLog(writeBuf.c_str(),writeBuf.length());
-        delete []buf;
-    };
+    });
     if(multiFlag){
         zy::dms::CLFileManager::GetInstance()->MultiRead(p);
     }else{
@@ -56,6 +59,7 @@ void Reader(int row,bool multiFlag = true) {
         }else{
             std::cout<<"read "<<row<<" fail"<<std::endl;
         }
+        delete p;
     }
 }
 int main(int argc,char **argv){
@@ -65,7 +69,7 @@ int main(int argc,char **argv){
 
     gettimeofday(&start,NULL);
     if(argc < 2){
-        std::cout<<"error input ,please ./exe write_row_num (option:thread_num test_read)"<<std::endl;
+        std::cout<<"error input ,please ./exe read_row_num (option:thread_num test_read)"<<std::endl;
         return -1;
     }
     int totalRow = std::stoi(argv[1]);
@@ -76,35 +80,16 @@ int main(int argc,char **argv){
         colums_type.push_back(CLObjectType::Int);
     }
 
-    std::unique_ptr<zy::dms::CLUserAttrVector> userInfo[totalRow];
-    for(int i=0;i<totalRow;i++){
-        userInfo[i].reset(new CLUserAttrVector(colums_type));
-    }
-    CLObjectProduceFactory factory;
     int thnum = (argc>2)?std::stoi(argv[2]):std::thread::hardware_concurrency();
     zy::dms::CLFileManager::InitInstance(1000,sizeof(int)*100,thnum);
-    for(int i=0;i<totalRow;i++){
-        auto &v = userInfo[i];
-        for(int j=1;j<=100;j++){
-            auto *intObject = factory.CreateObject(rand()%100);
-            v->PushBack(intObject);
-        }
-        storage(v.get(),thnum!=1);
-    }
-    if(argc > 3){
-        int readrow = atoi(argv[3]);
-        int size = 400;
-        char buf[size];
-        if(zy::dms::CLFileManager::GetInstance()->Read(readrow,buf,size)){
-            CLUserAttrVector desVec(colums_type);
-            desVec.FromCharBuffer(buf);
-            desVec.Print();
-        }else{
-            std::cout<<"read row="<<readrow<<" error may not exist"<<std::endl;
-        }
+
+    for (long i=0;i<totalRow;i++){
+        long rownum= rand()%totalRow;
+        std::cout<<"will read "<<rownum<<std::endl;
+        Reader(rownum,thnum != 1);
     }
     gettimeofday(&end,NULL);
-    std::cout<<"dms write row "<<totalRow<<" by "<<thnum<<" threads,consume "<<end.tv_sec*1000+end.tv_usec/1000
-    -start.tv_sec*1000-start.tv_usec/1000<<"ms"<<std::endl;
+    std::cout<<"dms read row "<<totalRow<<" by "<<thnum<<" threads,consume "<<end.tv_sec*1000+end.tv_usec/1000
+                                                                               -start.tv_sec*1000-start.tv_usec/1000<<"ms"<<std::endl;
     return 0;
 }

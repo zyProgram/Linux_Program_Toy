@@ -16,7 +16,7 @@
 namespace zy{
     namespace dms{
         struct SLReaderMethodParam{
-            int row;
+            long row;
             std::function<void(char *buf,int size)> callback;
         };
         struct SLWriterMethodParam{
@@ -34,6 +34,7 @@ namespace zy{
             static thread::CLLock _s_create_instance_lock;
             static CLFileManager *_s_instance;
             static int _s_row_size;
+            static int _s_thread_num;
             static int _s_auto_increace_file_num;
             friend class CLTableConfigure;
             CLTableConfigure _configure;
@@ -72,10 +73,10 @@ namespace zy{
 
             bool _ExtendLocalCLFile();
         public:
-            CLFileManager(int num=1)//std::thread::hardware_concurrency())
+            CLFileManager()
             {
                 //TODO 处理文件夹
-                _worker_pool = new thread::CLThreadPool(num);
+                _worker_pool = new thread::CLThreadPool(CLFileManager::_s_thread_num);
                 _worker_pool->Start();
                 _cur_total_rows = 0;
                 FromStorage();
@@ -111,6 +112,7 @@ namespace zy{
                 return CLFileManager::_s_row_size;
             }
             static bool InitInstance(int perFilesize,int rowSize,
+                                     int threadnum=std::thread::hardware_concurrency(),
                                     const std::string dirDes = "",
                                     const std::string& prefix = "_dms_file_",
                                     const std::string& suffix = ".txt"){
@@ -118,6 +120,7 @@ namespace zy{
                 CLFileManager::_s_max_rows_for_per_file = perFilesize;
                 CLFileManager::_s_dms_prefix = prefix;
                 CLFileManager::_s_dms_suffix = suffix;
+                CLFileManager::_s_thread_num = threadnum;
                 return true;
             }
             static CLFileManager *GetInstance();
@@ -179,8 +182,12 @@ namespace zy{
             void RunFuncEntity(){
                 SLReaderMethodParam *method = (SLReaderMethodParam*)(__runningContext);
                 char buf[CLFileManager::GetRowSize()];
-                CLFileManager::GetInstance()->Read(method->row,buf,CLFileManager::GetRowSize());
-                method->callback(buf,CLFileManager::GetRowSize());
+                if(CLFileManager::GetInstance()->Read(method->row,buf,CLFileManager::GetRowSize())){
+                    method->callback(buf,CLFileManager::GetRowSize());
+                }else{
+                    std::cout<<"read error when row = "<<method->row<<std::endl;
+                }
+                delete method;
             }
             ~CLMutilReaderFunc() = default;
         };

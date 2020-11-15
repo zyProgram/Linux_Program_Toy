@@ -48,13 +48,14 @@ namespace zy{
                 CLThreadPool *pool = (CLThreadPool *)(__runningContext);
                 while (_running){
                     pool->_task_submit_get_lock.Lock();
-                    while(pool->GetQueueSize() == 0){ //防止唤醒后，任务被其他工人抢了，导致没有任务
+                    while(pool->GetQueueSize() == 0 && _running){ //防止唤醒后，任务被其他工人抢了，导致没有任务
                         pool->_has_task_condition_var.Wait(pool->_task_submit_get_lock);
                     }
                     if(_running){
                         CLExcutiveAbstractFunc *func;
                         if(pool->GetFunc(&func)){
                             func->RunFuncEntity();
+                            delete func;
                             _total_task_num ++;
                         }else{
                             std::cout<<"worker "<<_id<<" is notifyed,but can not find any task,some logic error"<<std::endl;

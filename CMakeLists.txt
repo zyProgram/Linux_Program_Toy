@@ -19,9 +19,16 @@ add_executable(Linux_DMS main.cpp ${IOFile}
         ${NetFile})
 target_link_libraries(Linux_DMS pthread)
 
-add_executable(DMS_Object_Test data_define/TestUserData.cpp
+add_executable(TestWriter data_define/TestUserData.cpp
               ${ObjectFile}
               ${ThreadFile}
               ${AppFile}
               ${IOFile})
-target_link_libraries(DMS_Object_Test pthread)
+target_link_libraries(TestWriter pthread)
+
+add_executable(TestReader data_define/TestReader.cpp
+        ${ObjectFile}
+        ${ThreadFile}
+        ${AppFile}
+        ${IOFile})
+target_link_libraries(TestReader pthread)
